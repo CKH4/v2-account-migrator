@@ -1,6 +1,6 @@
 import { posix } from "path-browserify"
 
-import { MigratorStatusEvent, MigratorDetailsEvent, MigratorWarningEvent } from "./events"
+import { MigratorStatusEvent, MigratorDetailsEvent, MigratorWarningEvent, MigratorErrorEvent } from "./events"
 
 import { MasterHandle } from "../opaque/src/account"
 import { FolderMeta } from "../opaque/src/core/account/folder-meta"
@@ -87,7 +87,7 @@ export class AccountMigrator extends EventTarget {
 			const rootFolderV1 = await this.mh.getFolderMeta("/")
 			console.log(rootFolderV1)
 		} catch (err) {
-			this.dispatchEvent(new MigratorWarningEvent({ warning: "Account was already migrated, or has never been initialized." }))
+			this.dispatchEvent(new MigratorErrorEvent({ error: "Account was already migrated, or has never been initialized." }))
 
 			return
 		}
@@ -120,7 +120,7 @@ export class AccountMigrator extends EventTarget {
 			try {
 				await this.accountSystem.addFolder(path)
 			} catch (err) {
-				this.dispatchEvent(new MigratorWarningEvent({ warning: "Recieved unknown error: " + err }))
+				this.dispatchEvent(new MigratorErrorEvent({ error: `Recieved unknown error while adding folder ("${path}") v2 metadata: ${err}.` }))
 			}
 		}
 
@@ -128,7 +128,8 @@ export class AccountMigrator extends EventTarget {
 
 		for (let [path, fileMetadata] of allFiles) {
 			for (let version of fileMetadata.versions) {
-				this.setDetails(`Initializing file ${version.handle.slice(0, 4)}... ("${fileMetadata.name}") in "${path}".`)
+				const versionID = version.handle.slice(0, 4) + "..."
+				this.setDetails(`Initializing file ${versionID} ("${fileMetadata.name}") in "${path}".`)
 
 				try {
 					try {
@@ -139,7 +140,7 @@ export class AccountMigrator extends EventTarget {
 							await this.accountSystem.finishUpload(fileMetadataV2Location)
 						}
 
-						this.dispatchEvent(new MigratorWarningEvent({ warning: "File handle already exists in metadata." }))
+						this.dispatchEvent(new MigratorWarningEvent({ warning: `File handle (${versionID}) already exists in v2 metadata. Keeping existing metadata.` }))
 					} catch (err) {
 						if (err instanceof AccountSystemNotFoundError) {
 							const fileHandle = hexToBytes(version.handle)
@@ -173,11 +174,11 @@ export class AccountMigrator extends EventTarget {
 
 							await this.accountSystem.finishUpload(fileMetadataV2.location)
 						} else {
-							this.dispatchEvent(new MigratorWarningEvent({ warning: "Recieved unknown error: " + err }))
+							this.dispatchEvent(new MigratorErrorEvent({ error: `Recieved unknown error while adding file ${versionID} v2 metadata: ${err}` }))
 						}
 					}
 				} catch (err) {
-					this.dispatchEvent(new MigratorWarningEvent({ warning: "Recieved unknown error: " + err }))
+					this.dispatchEvent(new MigratorErrorEvent({ error: `Recieved unknown error for file ${versionID}: ${err}` }))
 				}
 			}
 		}
@@ -201,7 +202,7 @@ export class AccountMigrator extends EventTarget {
 				output = output.concat(await this.collectFolderRecursively(subPath))
 			}
 		} catch (err) {
-			this.dispatchEvent(new MigratorWarningEvent({ warning: err }))
+			this.dispatchEvent(new MigratorErrorEvent({ error: `Recieved unknown error while collecting folder ("${path}") v1 metadata: ${err}.` }))
 		} finally {
 			return output
 		}

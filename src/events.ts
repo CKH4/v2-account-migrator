@@ -4,6 +4,7 @@ export enum MigratorEvents {
 	STATUS = "status",
 	DETAILS = "details",
 	WARNING = "warning",
+	ERROR = "error",
 }
 
 type MigratorStatusEventData = { status: string }
@@ -27,6 +28,13 @@ export class MigratorWarningEvent extends CustomEvent<MigratorWarningEventData> 
 	}
 }
 
+type MigratorErrorEventData = { error: string }
+export class MigratorErrorEvent extends CustomEvent<MigratorErrorEventData> {
+	constructor (data: MigratorErrorEventData) {
+		super(MigratorEvents.ERROR, { detail: data })
+	}
+}
+
 export interface IOpaqueDownloadEvents {
 	addEventListener(
 		type: MigratorStatusEventData,
@@ -47,6 +55,11 @@ export interface IOpaqueDownloadEvents {
 	addEventListener(
 		type: MigratorEvents.WARNING,
 		listener: EventListenerOrEventListenerObject<MigratorWarningEvent> | null,
+		options?: boolean | AddEventListenerOptions | undefined,
+	): void
+	addEventListener(
+		type: MigratorEvents.ERROR,
+		listener: EventListenerOrEventListenerObject<MigratorErrorEvent> | null,
 		options?: boolean | AddEventListenerOptions | undefined,
 	): void
 }
