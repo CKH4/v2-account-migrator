@@ -1,0 +1,17 @@
+{
+  "name": "v2-account-migrator",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/index.ts",
+  "scripts": {
+    "install": "git submodule update --init && npm run install:ts-client-library && npm run install:opaque",
+    "install:ts-client-library": "cd ts-client-library && git fetch --all && git reset --hard origin/dev && npx lerna bootstrap && cd ..",
+    "install:opaque": "cd opaque && git fetch --all && git reset --hard origin/dev && npm i && cd ..",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "path-browserify": "^1.0.1"
+  }
+}
