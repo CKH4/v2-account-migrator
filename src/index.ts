@@ -6,7 +6,7 @@ import { MasterHandle } from "../opaque/src/account"
 import { FolderMeta } from "../opaque/src/core/account/folder-meta"
 import { FileEntryMeta } from "../opaque/src/core/account/file-entry"
 
-import { Account } from "../ts-client-library/packages/account-management"
+import { Account, AccountGetData } from "../ts-client-library/packages/account-management"
 import { AccountSystem, AccountSystemNotFoundError, MetadataAccess } from "../ts-client-library/packages/account-system"
 import { FileSystemObject } from "../ts-client-library/packages/filesystem-access/src/filesystem-object"
 import { CryptoMiddleware, NetworkMiddleware } from "../ts-client-library/packages/middleware"
@@ -93,7 +93,7 @@ export class AccountMigrator extends EventTarget {
 		}
 
 		this.setDetails("")
-		this.setStatus("Collecting all folders. This may take a while.")
+		this.setStatus("Collecting all folders.")
 		const allFolders = await this.collectFolderRecursively("/")
 		console.log(allFolders)
 
@@ -122,6 +122,39 @@ export class AccountMigrator extends EventTarget {
 			} catch (err) {
 				this.dispatchEvent(new MigratorErrorEvent({ error: `Recieved unknown error while adding folder ("${path}") v2 metadata: ${err}.` }))
 			}
+		}
+
+		this.setDetails("")
+		this.setStatus("Counting file sizes.")
+		try {
+			const acctInfo = await this.mh.getAccountInfo() as AccountGetData
+			const accountedStorageUsed = Math.round(acctInfo.storageUsed * 1000 * 1000 * 1000)
+			let totalFileSize = 0
+			for (let [_, fileMetadata] of allFiles) {
+				for (let version of fileMetadata.versions) {
+					const versionID = version.handle.slice(0, 4) + "..."
+					this.setDetails(`Getting file ${versionID} size. Total size counted: ${totalFileSize} bytes.`)
+
+					const downloadUrl = (await (await fetch(
+						this.config.storageNodeV1 + "/api/v1/download", {
+							method: "POST",
+							body: JSON.stringify({ fileID: version.handle.slice(0, 64) })
+						}
+					)).json()).fileDownloadUrl
+
+					const fileSize = +(await fetch(downloadUrl + "/file", { method: "HEAD" })).headers.get("content-length")!
+					// file meta size isn't counted
+					// const metaSize = +(await fetch(downloadUrl + "/metadata", { method: "HEAD" })).headers.get("content-length")!
+
+					totalFileSize += fileSize // + metaSize
+				}
+			}
+
+			if (accountedStorageUsed != totalFileSize) {
+				this.dispatchEvent(new MigratorWarningEvent({ warning: `This account appears to be partially corrupted, because the accounted storage used (${accountedStorageUsed} bytes) does not match the measured file size (${totalFileSize} bytes). The v2 metadata may not be complete. Please look for any inconsistencies.` }))
+			}
+		} catch (err) {
+			this.dispatchEvent(new MigratorErrorEvent({ error: `Recieved unknown error while calculating storage used: ${err}.` }))
 		}
 
 		this.setStatus("Migrating files.")
